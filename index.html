@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Nur Harian</title>
+<meta name="description" content="Waktu sholat, adzan, Al-Qur'an offline, kiblat, jadwal puasa, kalender Hijriah, dan tracker sholat.">
+<meta name="theme-color" content="#0B5D4B">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+
+  <nav class="nav" id="nav">
+    <div class="brand"><span class="logo">☪</span><div><b>Nur Harian</b><small>Teman ibadah harian</small></div></div>
+    <a href="#beranda" data-p="beranda"><i>🕌</i><span>Waktu Sholat</span></a>
+    <a href="#quran" data-p="quran"><i>📖</i><span>Al-Qur'an</span></a>
+    <a href="#tracker" data-p="tracker"><i>✅</i><span>Tracker</span></a>
+    <a href="#kalender" data-p="kalender"><i>🗓️</i><span>Kalender</span></a>
+    <a href="#puasa" data-p="puasa"><i>🌙</i><span>Puasa</span></a>
+    <a href="#kiblat" data-p="kiblat"><i>🧭</i><span>Kiblat</span></a>
+    <a href="#dzikir" data-p="dzikir"><i>📿</i><span>Dzikir</span></a>
+    <a href="#setelan" data-p="setelan"><i>⚙️</i><span>Setelan</span></a>
+  </nav>
+
+  <div class="content">
+    <header class="hero">
+      <div class="hero-in">
+        <div>
+          <div class="hdate" id="hdate">Memuat tanggal…</div>
+          <div class="hloc" id="loc">📍 Jakarta</div>
+        </div>
+        <div class="hero-r">
+          <span class="pill" id="net">● Online</span>
+          <button class="btn sm light" id="installBtn" hidden>⬇ Pasang</button>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div id="stopAdzanBar" class="card adzanbar" hidden>
+        <span>🔊 Adzan sedang berkumandang</span>
+        <button class="btn sm" id="stopAdzan">Hentikan</button>
+      </div>
+
+      <!-- BERANDA -->
+      <section class="page" id="p-beranda">
+        <div class="card next">
+          <div class="mut">Sholat berikutnya</div>
+          <div class="nm" id="nname">–</div>
+          <div class="cd" id="ncd">--:--:--</div>
+          <div class="mut" id="ntime"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><b>Jadwal hari ini</b><span class="mut" id="methodInfo">Kemenag RI</span></div>
+          <div id="times"><div class="mut">Memuat jadwal…</div></div>
+        </div>
+        <div class="card">
+          <b>Lokasi</b>
+          <div class="flex mt">
+            <select id="city"></select>
+            <button class="btn ghost" id="gps">📍 Pakai lokasi saya</button>
+          </div>
+        </div>
+        <div class="card">
+          <b>Pengingat & Adzan</b>
+          <label class="sw"><input type="checkbox" id="remind"> Notifikasi saat waktu sholat tiba</label>
+          <label class="sw"><input type="checkbox" id="adzan"> Putar adzan saat waktu sholat tiba</label>
+          <label class="sw"><input type="checkbox" id="push"> Notifikasi walau aplikasi tertutup (via server, butuh internet)</label>
+          <label class="sw">Ingatkan lebih awal
+            <select id="pre"><option value="0">Tepat waktu</option><option value="5">5 menit</option><option value="10">10 menit</option><option value="15">15 menit</option></select>
+          </label>
+          <div class="flex mt"><button class="btn ghost sm" id="testAdzan">▶ Tes adzan</button></div>
+          <p class="mut small">Tanpa notifikasi server, pengingat hanya berjalan selama aplikasi/tab terbuka. Dengan notifikasi server, pengingat muncul walau aplikasi tertutup, tetapi perangkat harus online. Suara adzan penuh hanya diputar saat aplikasi terbuka atau saat Anda mengetuk notifikasi. Di iPhone, pasang dulu ke layar utama.</p>
+        </div>
+      </section>
+
+      <!-- QURAN -->
+      <section class="page" id="p-quran">
+        <div id="qhome">
+          <div class="card" id="qlast" hidden></div>
+          <div class="card" id="qoffline"></div>
+          <div class="card">
+            <input id="qsearch" placeholder="Cari surah… (mis. Yasin, 36, Al-Kahfi)" class="full">
+            <div id="qlist" class="mt"><div class="mut">Memuat daftar surah…</div></div>
+          </div>
+        </div>
+        <div id="qread" hidden></div>
+      </section>
+
+      <!-- TRACKER -->
+      <section class="page" id="p-tracker">
+        <div class="card">
+          <div class="card-h">
+            <button class="btn ghost sm" id="tPrev">‹</button>
+            <b id="tDate">Hari ini</b>
+            <button class="btn ghost sm" id="tNext">›</button>
+          </div>
+          <div id="tChecks" class="mt"></div>
+        </div>
+        <div class="grid3" id="tStats"></div>
+        <div class="card"><b>7 hari terakhir</b><div id="tWeek" class="week mt"></div></div>
+        <div class="card">
+          <div class="card-h"><b id="tMonthT">Bulan ini</b>
+            <span><button class="btn ghost sm" id="tmPrev">‹</button> <button class="btn ghost sm" id="tmNext">›</button></span></div>
+          <div id="tMonth" class="heat mt"></div>
+          <div class="legend mut small">Sedikit <i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i><i class="l5"></i> Lengkap</div>
+        </div>
+      </section>
+
+      <!-- KALENDER -->
+      <section class="page" id="p-kalender">
+        <div class="card">
+          <div class="card-h">
+            <button class="btn ghost sm" id="cPrev">‹</button>
+            <div class="ctr"><b id="cTitle"></b><div class="mut small" id="cHijri"></div></div>
+            <button class="btn ghost sm" id="cNext">›</button>
+          </div>
+          <div class="cal mt" id="cal"></div>
+          <div class="legend mut small">
+            <span class="dot s"></span> Puasa sunnah <span class="dot w"></span> Ramadhan <span class="dot h"></span> Hari besar / haram puasa
+          </div>
+        </div>
+        <div class="card" id="cDetail"><div class="mut">Ketuk sebuah tanggal untuk melihat detail.</div></div>
+      </section>
+
+      <!-- PUASA -->
+      <section class="page" id="p-puasa">
+        <div class="card">
+          <b>Puasa sunnah 45 hari ke depan</b>
+          <div id="fastList" class="mt"></div>
+        </div>
+        <div class="card">
+          <div class="card-h">
+            <button class="btn ghost sm" id="iPrev">‹</button>
+            <div class="ctr"><b id="iTitle">Imsakiyah</b><div class="mut small" id="iLoc"></div></div>
+            <button class="btn ghost sm" id="iNext">›</button>
+          </div>
+          <div class="tscroll mt"><table id="imsak"></table></div>
+          <p class="mut small">Jadwal imsak dihitung 10 menit sebelum Subuh. Selalu cocokkan dengan pengumuman resmi pemerintah/ormas untuk awal Ramadhan.</p>
+        </div>
+      </section>
+
+      <!-- KIBLAT -->
+      <section class="page" id="p-kiblat">
+        <div class="card ctr">
+          <b>Arah Kiblat</b>
+          <div class="compass"><span class="n">U</span><span class="e">T</span><span class="s">S</span><span class="w">B</span><div class="needle" id="needle"></div></div>
+          <div id="qinfo" class="mut">Menghitung…</div>
+          <button class="btn mt" id="compassBtn">Aktifkan kompas perangkat</button>
+          <p class="mut small">Di ponsel, aktifkan kompas agar panah mengikuti arah perangkat. Di laptop, panah menunjukkan sudut dari utara (0° = atas).</p>
+        </div>
+      </section>
+
+      <!-- DZIKIR -->
+      <section class="page" id="p-dzikir">
+        <div class="card ctr">
+          <b>Tasbih Digital</b>
+          <button class="tas" id="tas">0</button>
+          <div class="flex center">
+            <select id="tasTarget"><option>33</option><option>99</option><option>100</option><option value="0">Tanpa target</option></select>
+            <button class="btn ghost" id="tasReset">Reset</button>
+          </div>
+        </div>
+        <div class="card"><b>Doa & Dzikir Harian</b><div id="doa" class="mt"></div></div>
+      </section>
+
+      <!-- SETELAN -->
+      <section class="page" id="p-setelan">
+        <div class="card">
+          <b>Tampilan</b>
+          <label class="sw">Tema
+            <select id="theme"><option value="auto">Otomatis</option><option value="light">Terang</option><option value="dark">Gelap</option></select>
+          </label>
+          <label class="sw">Koreksi tanggal Hijriah
+            <select id="hadj"><option value="-1">-1 hari</option><option value="0">0 (standar)</option><option value="1">+1 hari</option></select>
+          </label>
+          <p class="mut small">Kalender Hijriah dihitung otomatis (Umm al-Qura). Jika berbeda dengan penetapan pemerintah Indonesia, geser 1 hari di sini.</p>
+        </div>
+        <div class="card">
+          <b>Qari audio Al-Qur'an</b>
+          <label class="sw">Qari
+            <select id="qori">
+              <option value="01">Abdullah Al-Juhany</option>
+              <option value="02">Abdul Muhsin Al-Qasim</option>
+              <option value="03">Abdurrahman as-Sudais</option>
+              <option value="04">Ibrahim Al-Dossari</option>
+              <option value="05">Misyari Rasyid Al-Afasi</option>
+            </select>
+          </label>
+        </div>
+        <div class="card">
+          <b>Data & Cadangan</b>
+          <p class="mut small">Tanpa login: semua data (tracker, penanda Qur'an, setelan) tersimpan di perangkat ini. Gunakan cadangan untuk memindahkannya ke perangkat lain.</p>
+          <div class="flex">
+            <button class="btn ghost" id="exp">⬆ Ekspor cadangan</button>
+            <button class="btn ghost" id="imp">⬇ Impor cadangan</button>
+            <input type="file" id="impFile" accept="application/json" hidden>
+          </div>
+        </div>
+        <div class="card">
+          <b>Tentang</b>
+          <p class="mut small">Jadwal sholat: Aladhan API (metode Kemenag RI). Al-Qur'an: equran.id. Aplikasi ini alat bantu; mohon cocokkan dengan pengumuman resmi setempat.</p>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+<script src="js/app.js"></script>
+</body>
+</html>

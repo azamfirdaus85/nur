@@ -1,0 +1,17 @@
+{
+  "name": "Nur Harian",
+  "short_name": "Nur Harian",
+  "description": "Waktu sholat, adzan, Al-Qur'an offline, kiblat, jadwal puasa, kalender Hijriah, dan tracker sholat.",
+  "lang": "id",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0B5D4B",
+  "theme_color": "#0B5D4B",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

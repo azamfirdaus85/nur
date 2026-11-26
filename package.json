@@ -1,0 +1,11 @@
+{
+  "name": "nurharian",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Nur Harian - PWA Islami dengan Web Push dari server",
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "@libsql/client": "^0.14.0",
+    "web-push": "^3.6.7"
+  }
+}
