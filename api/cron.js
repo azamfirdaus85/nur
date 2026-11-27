@@ -1,103 +1,151 @@
+/**
+ * api/send.js — pengirim notifikasi sholat (Web Push).
+ * Dipanggil setiap menit oleh penjadwal luar (mis. cron-job.org):
+ *   https://DOMAIN-ANDA/api/send?key=ISI_CRON_SECRET
+ * Tes langsung (kirim "Tes notifikasi" ke semua perangkat terdaftar):
+ *   https://DOMAIN-ANDA/api/send?key=ISI_CRON_SECRET&test=1
+ */
 const crypto = require('crypto');
 const { getDb, init, setupVapid, webpush } = require('./_lib');
 
-const PR = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
-const PK = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
-const WINDOW = 8; // menit toleransi keterlambatan pemanggil cron
+const PRAYERS = [['Fajr', 'Subuh'], ['Dhuhr', 'Dzuhur'], ['Asr', 'Ashar'], ['Maghrib', 'Maghrib'], ['Isha', 'Isya']];
+const NOW_WINDOW = 6 * 60 * 1000; // notifikasi "waktu masuk" masih dikirim sampai 6 menit setelahnya
 
-/* tanggal & menit-dalam-hari di zona waktu tertentu */
-function localParts(tz, d) {
-  const f = new Intl.DateTimeFormat('en-CA', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
-  const p = Object.fromEntries(f.formatToParts(d).map(x => [x.type, x.value]));
-  return { date: `${p.year}-${p.month}-${p.day}`, min: (+p.hour % 24) * 60 + +p.minute };
+const sha = s => crypto.createHash('sha1').update(String(s)).digest('hex').slice(0, 24);
+const pad = n => String(n).padStart(2, '0');
+
+function localParts(date, tz) {
+  const f = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric'
+  });
+  return Object.fromEntries(f.formatToParts(date).map(p => [p.type, p.value]));
 }
 
-async function getTimes(db, lat, lon, date) {
-  const k = `${lat}|${lon}|${date}`;
-  const c = await db.execute({ sql: 'SELECT v FROM tcache WHERE k=?', args: [k] });
-  if (c.rows.length) return JSON.parse(c.rows[0].v);
-  const [y, m, d] = date.split('-');
-  const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 8000);
-  try {
-    const r = await fetch(`https://api.aladhan.com/v1/timings/${d}-${m}-${y}?latitude=${lat}&longitude=${lon}&method=20`, { signal: ctl.signal });
-    const j = await r.json();
-    if (!j || j.code !== 200) throw new Error('aladhan');
-    const t = {};
-    PK.forEach(x => { t[x] = j.data.timings[x].slice(0, 5); });
-    await db.execute({ sql: 'INSERT OR REPLACE INTO tcache(k,d,v) VALUES(?,?,?)', args: [k, date, JSON.stringify(t)] });
-    return t;
-  } finally { clearTimeout(to); }
+// jam lokal di zona waktu lokasi -> Date absolut (sama dengan logika di app.js)
+function zdate(y, mo, d, h, mi, tz) {
+  const guess = Date.UTC(y, mo - 1, d, h, mi);
+  const off = t => {
+    const p = localParts(new Date(t), tz);
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute) - t;
+  };
+  let t = guess - off(guess);
+  t = guess - off(t);
+  return new Date(t);
+}
+
+async function monthData(db, lat, lon, y, m) {
+  const k = `cal_${lat.toFixed(2)}_${lon.toFixed(2)}_${y}_${m}`;
+  const hit = await db.execute({ sql: 'SELECT v FROM tcache WHERE k=?', args: [k] });
+  if (hit.rows.length) return JSON.parse(hit.rows[0].v);
+  const r = await fetch(`https://api.aladhan.com/v1/calendar/${y}/${m}?latitude=${lat}&longitude=${lon}&method=20`);
+  if (!r.ok) throw new Error('aladhan HTTP ' + r.status);
+  const j = await r.json();
+  if (!j || j.code !== 200 || !Array.isArray(j.data)) throw new Error('data aladhan tidak valid');
+  const v = j.data.map(x => ({ t: PRAYERS.map(([key]) => x.timings[key].slice(0, 5)), tz: x.meta.timezone }));
+  await db.execute({
+    sql: 'INSERT OR REPLACE INTO tcache(k,d,v) VALUES(?,?,?)',
+    args: [k, `${y}-${pad(m)}`, JSON.stringify(v)]
+  });
+  return v;
 }
 
 module.exports = async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const auth = req.headers.authorization || '';
-  const qkey = (req.query && req.query.key) || '';
-  if (!secret || (auth !== `Bearer ${secret}` && qkey !== secret)) return res.status(401).json({ error: 'unauthorized' });
-
   try {
+    const secret = process.env.CRON_SECRET;
+    if (!secret) return res.status(500).json({ error: 'CRON_SECRET belum diatur di server' });
+    const given = (req.headers.authorization || '').replace(/^Bearer\s+/i, '') || (req.query && req.query.key) || '';
+    if (!crypto.timingSafeEqual(Buffer.from(sha(given)), Buffer.from(sha(secret))))
+      return res.status(401).json({ error: 'tidak diizinkan' });
+
     await init();
     setupVapid();
     const db = getDb();
     const now = new Date();
+    const test = req.query && req.query.test === '1';
+    const subs = (await db.execute('SELECT endpoint,sub,lat,lon,tz,pre,adzan,name FROM subs')).rows;
+    const stats = { subs: subs.length, sent: 0, removed: 0, failed: 0, errors: [] };
 
-    // bersih-bersih data lama
-    const cutoff = new Date(now.getTime() - 3 * 864e5);
-    await db.execute({ sql: 'DELETE FROM sent WHERE ts<?', args: [cutoff.getTime()] });
-    await db.execute({ sql: 'DELETE FROM tcache WHERE d<?', args: [cutoff.toISOString().slice(0, 10)] });
-
-    const { rows } = await db.execute('SELECT endpoint,sub,lat,lon,tz,pre,adzan,name FROM subs');
-    const cache = new Map(), jobs = [];
-
-    for (const r of rows) {
-      let lp;
-      try { lp = localParts(r.tz, now); } catch (e) { continue; }
-      const tk = `${r.lat}|${r.lon}|${lp.date}`;
-      if (!cache.has(tk)) cache.set(tk, getTimes(db, r.lat, r.lon, lp.date).catch(() => null));
-      const T = await cache.get(tk);
-      if (!T) continue;
-      for (let i = 0; i < 5; i++) {
-        const [h, m] = T[PK[i]].split(':').map(Number);
-        const tm = h * 60 + m;
-        const kinds = [['now', tm]];
-        if (r.pre > 0) kinds.push(['pre', tm - r.pre]);
-        for (const [kind, target] of kinds) {
-          const diff = lp.min - target;
-          if (diff >= 0 && diff <= WINDOW) jobs.push({ r, i, kind, date: lp.date });
-        }
-      }
-    }
-
-    const stat = { subs: rows.length, due: jobs.length, sent: 0, dup: 0, gone: 0, err: 0 };
-
-    async function run(j) {
-      const { r, i, kind, date } = j;
-      const key = crypto.createHash('sha1').update(r.endpoint).digest('hex') + `|${date}|${PK[i]}|${kind}`;
-      const ins = await db.execute({ sql: 'INSERT OR IGNORE INTO sent(k,ts) VALUES(?,?)', args: [key, Date.now()] });
-      if (!ins.rowsAffected) return 'dup';
-      const place = r.name ? ` untuk wilayah ${r.name}` : '';
-      const payload = kind === 'now'
-        ? { title: 'Waktu ' + PR[i], body: `Telah masuk waktu sholat ${PR[i]}${place}`, tag: `sholat-${PK[i]}-now`, adzan: !!r.adzan, t: Date.now() }
-        : { title: `${r.pre} menit lagi ${PR[i]}`, body: `Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`, tag: `sholat-${PK[i]}-pre`, adzan: false, t: Date.now() };
+    // 'ok' | 'gone' | 'fail'
+    async function push(row, payload) {
       try {
-        await webpush.sendNotification(JSON.parse(r.sub), JSON.stringify(payload), { TTL: 900, urgency: 'high' });
-        return 'sent';
+        await webpush.sendNotification(JSON.parse(row.sub), JSON.stringify(payload), { TTL: 600, urgency: 'high' });
+        stats.sent++;
+        return 'ok';
       } catch (e) {
         if (e.statusCode === 404 || e.statusCode === 410) {
-          await db.execute({ sql: 'DELETE FROM subs WHERE endpoint=?', args: [r.endpoint] });
+          await db.execute({ sql: 'DELETE FROM subs WHERE endpoint=?', args: [row.endpoint] });
+          stats.removed++;
           return 'gone';
         }
-        await db.execute({ sql: 'DELETE FROM sent WHERE k=?', args: [key] }); // boleh dicoba lagi di panggilan berikutnya
-        return 'err';
+        stats.failed++;
+        console.error('push gagal', e.statusCode, e.message);
+        return 'fail';
       }
     }
 
-    for (let n = 0; n < jobs.length; n += 20) {
-      const out = await Promise.allSettled(jobs.slice(n, n + 20).map(run));
-      out.forEach(o => { stat[o.status === 'fulfilled' ? o.value : 'err']++; });
+    if (test) {
+      for (const row of subs) {
+        await push(row, { title: 'Tes notifikasi', body: 'Notifikasi Nur Harian sudah aktif di perangkat ini.', tag: 'tes', t: Date.now() });
+      }
+      return res.status(200).json({ ok: true, test: true, ...stats });
     }
-    res.status(200).json(stat);
+
+    const cache = new Map();
+    const getMonth = async (row, y, m) => {
+      const k = `${row.lat.toFixed(2)}|${row.lon.toFixed(2)}|${y}|${m}`;
+      if (!cache.has(k)) cache.set(k, monthData(db, row.lat, row.lon, y, m).catch(e => { cache.delete(k); throw e; }));
+      return cache.get(k);
+    };
+
+    for (const row of subs) {
+      try {
+        const lp = localParts(now, row.tz);
+        const y = +lp.year, m = +lp.month, d = +lp.day;
+        const md = await getMonth(row, y, m);
+        const day = md[d - 1];
+        if (!day) continue;
+
+        for (let i = 0; i < PRAYERS.length; i++) {
+          const [key, label] = PRAYERS[i];
+          const [h, mi] = day.t[i].split(':');
+          const t = zdate(y, m, d, +h, +mi, row.tz);
+          const diff = t - now;
+          const jobs = [];
+          if (row.pre > 0 && diff > 0 && diff <= row.pre * 60000) jobs.push('pre');
+          if (diff <= 0 && -diff < NOW_WINDOW) jobs.push('now');
+
+          for (const kind of jobs) {
+            const k = `${sha(row.endpoint)}|${y}-${m}-${d}|${key}|${kind}`;
+            const claim = await db.execute({ sql: 'INSERT OR IGNORE INTO sent(k,ts) VALUES(?,?)', args: [k, Date.now()] });
+            if (claim.rowsAffected !== 1) continue; // sudah pernah dikirim
+            const payload = kind === 'now'
+              ? {
+                  title: 'Waktu ' + label,
+                  body: `Telah masuk waktu sholat ${label}` + (row.name ? ` untuk wilayah ${row.name}` : ''),
+                  tag: `sholat-${key}-now`, adzan: !!row.adzan, t: t.getTime()
+                }
+              : {
+                  title: `${row.pre} menit lagi ${label}`,
+                  body: `Bersiaplah, waktu ${label} sebentar lagi masuk.`,
+                  tag: `sholat-${key}-pre`, adzan: false, t: t.getTime()
+                };
+            const r = await push(row, payload);
+            if (r === 'fail') await db.execute({ sql: 'DELETE FROM sent WHERE k=?', args: [k] }); // coba lagi menit berikutnya
+            if (r === 'gone') break;
+          }
+        }
+      } catch (e) {
+        stats.errors.push(String(e.message || e).slice(0, 120));
+      }
+    }
+
+    // bersih-bersih
+    const old = new Date(now.getTime() - 40 * 86400000);
+    await db.execute({ sql: 'DELETE FROM sent WHERE ts<?', args: [Date.now() - 3 * 86400000] });
+    await db.execute({ sql: 'DELETE FROM tcache WHERE d<?', args: [`${old.getUTCFullYear()}-${pad(old.getUTCMonth() + 1)}`] });
+
+    res.status(200).json({ ok: true, at: now.toISOString(), ...stats });
   } catch (e) {
-    res.status(500).json({ error: String(e.message || e) });
+    res.status(500).json({ error: 'server', detail: String(e.message || e) });
   }
 };
