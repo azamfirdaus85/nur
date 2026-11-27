@@ -266,7 +266,7 @@ async function getSub(create){
   return sub;
 }
 async function pushSend(sub){
-  await jpost('api/subscribe','POST',{subscription:sub.toJSON(),lat:place.lat,lon:place.lon,tz:placeTz,name:place.name,pre:+$('#pre').value,adzan:$('#adzan').checked});
+  await jpost('scribe','POST',{subscription:sub.toJSON(),lat:place.lat,lon:place.lon,tz:placeTz,name:place.name,pre:+$('#pre').value,adzan:$('#adzan').checked});
 }
 let pushT=null;
 function syncPush(){
