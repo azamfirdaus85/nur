@@ -94,7 +94,7 @@ module.exports = async (req, res) => {
       const place = r.name ? ` untuk wilayah ${r.name}` : '';
       const payload = kind === 'now'
         ? { title: 'Waktu ' + PR[i], body: `Telah masuk waktu sholat ${PR[i]}${place}`, tag: `sholat-${PK[i]}-now`, adzan: !!r.adzan, t: Date.now() }
-        : { title: `${r.pre} menit lagi ${PR[i]}`, body: `Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`, tag: `sholat-${PK[i]}-pre`, adzan: false, t: Date.now() };
+        : { title: `${r.pre % 60 === 0 ? (r.pre / 60) + ' jam' : r.pre + ' menit'} lagi ${PR[i]}`, body: `Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`, tag: `sholat-${PK[i]}-pre`, adzan: false, t: Date.now() };
       try {
         await webpush.sendNotification(JSON.parse(r.sub), JSON.stringify(payload), { TTL: 900, urgency: 'high' });
         return 'sent';

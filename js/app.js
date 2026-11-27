@@ -197,7 +197,7 @@ function tick(){
     }
     if(pre>0&&now<t&&t-now<=pre*60000&&!fired[id+'p']){
       fired[id+'p']=1;
-      notify(`${pre} menit lagi ${PR[i]}`,`Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`,`sholat-${PKEY[i]}-pre`);
+      notify(`${pre%60===0?pre/60+' jam':pre+' menit'} lagi ${PR[i]}`,`Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`,`sholat-${PKEY[i]}-pre`);
     }
   }
 }
@@ -266,7 +266,7 @@ async function getSub(create){
   return sub;
 }
 async function pushSend(sub){
-  await jpost('scribe','POST',{subscription:sub.toJSON(),lat:place.lat,lon:place.lon,tz:placeTz,name:place.name,pre:+$('#pre').value,adzan:$('#adzan').checked});
+  await jpost('api/subscribe','POST',{subscription:sub.toJSON(),lat:place.lat,lon:place.lon,tz:placeTz,name:place.name,pre:+$('#pre').value,adzan:$('#adzan').checked});
 }
 let pushT=null;
 function syncPush(){
