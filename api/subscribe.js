@@ -24,7 +24,7 @@ module.exports = async (req, res) => {
     const lat = Number(b.lat), lon = Number(b.lon);
     if (!(lat >= -90 && lat <= 90) || !(lon >= -180 && lon <= 180)) return res.status(400).json({ error: 'lokasi tidak valid' });
     if (typeof b.tz !== 'string' || !validTz(b.tz)) return res.status(400).json({ error: 'zona waktu tidak valid' });
-    const pre = [0, 5, 10, 15, 60].includes(Number(b.pre)) ? Number(b.pre) : 0;
+    const pre = [0, 5, 10, 15, 30, 60].includes(Number(b.pre)) ? Number(b.pre) : 0;
     const adzan = b.adzan ? 1 : 0;
     const name = String(b.name || '').slice(0, 80);
 
