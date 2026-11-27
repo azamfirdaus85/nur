@@ -1,4 +1,4 @@
-const VER='nurharian-v6';
+const VER='nurharian-v7';
 const SHELL=['./','index.html','css/style.css','js/app.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png'];
 const OPTIONAL=['audio/adzan.mp3'];
 

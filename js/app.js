@@ -191,7 +191,7 @@ function tick(){
     const t=times[PKEY[i]],id=ymd(t)+PKEY[i];
     if(now>=t&&now-t<90000&&!fired[id]){
       fired[id]=1;
-      notify('Waktu '+PR[i],`Telah masuk waktu sholat ${PR[i]}`+(ls.get('place',place).name?` untuk wilayah ${place.name}`:''),`sholat-${PKEY[i]}-now`);
+      {const m=nowMsg(i,t.getDay()===5,ls.get('place',place).name?place.name:'');notify(m.title,m.body,`sholat-${PKEY[i]}-now`);}
       if($('#adzan').checked&&i!==undefined&&PKEY[i]!=='Sunrise')playAdzan();
       renderTimes();
     }
@@ -204,6 +204,21 @@ function tick(){
 setInterval(tick,1000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick()});
 
+const REM = [
+  'Dua rakaat sebelum Subuh lebih baik daripada dunia dan seisinya. (HR. Muslim)',
+  'Sempatkan sejenak rehat dari kesibukan, tunaikan sholat tepat waktu.',
+  'Jagalah sholat-sholatmu, terutama sholat wustha. (QS. Al-Baqarah: 238)',
+  'Amalan yang paling dicintai Allah adalah sholat tepat pada waktunya. (HR. Bukhari & Muslim)',
+  'Siapa yang sholat Isya berjamaah, seakan-akan ia sholat setengah malam. (HR. Muslim)'
+];
+const JUMAT = 'Sholat lima waktu, Jumat ke Jumat, dan Ramadhan ke Ramadhan adalah penghapus dosa di antara keduanya selama dosa besar dijauhi. (HR. Muslim)';
+function nowMsg(i, friday, name) {
+  const jumat = friday && i === 1;
+  return {
+    title: jumat ? 'Waktunya Sholat Jumat' : 'Waktunya Sholat ' + PR[i],
+    body: (jumat ? JUMAT : REM[i]) + (name ? `\nWilayah ${name}` : '')
+  };
+}
 async function notify(title,body,tag){
   if(!ls.get('remind',false)||!('Notification' in window)||Notification.permission!=='granted')return;
   try{

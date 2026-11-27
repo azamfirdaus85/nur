@@ -3,6 +3,21 @@ const { getDb, init, setupVapid, webpush } = require('./_lib');
 
 const PR = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
 const PK = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+const REM = [
+  'Dua rakaat sebelum Subuh lebih baik daripada dunia dan seisinya. (HR. Muslim)',
+  'Sempatkan sejenak rehat dari kesibukan, tunaikan sholat tepat waktu.',
+  'Jagalah sholat-sholatmu, terutama sholat wustha. (QS. Al-Baqarah: 238)',
+  'Amalan yang paling dicintai Allah adalah sholat tepat pada waktunya. (HR. Bukhari & Muslim)',
+  'Siapa yang sholat Isya berjamaah, seakan-akan ia sholat setengah malam. (HR. Muslim)'
+];
+const JUMAT = 'Sholat lima waktu, Jumat ke Jumat, dan Ramadhan ke Ramadhan adalah penghapus dosa di antara keduanya selama dosa besar dijauhi. (HR. Muslim)';
+function nowMsg(i, friday, name) {
+  const jumat = friday && i === 1;
+  return {
+    title: jumat ? 'Waktunya Sholat Jumat' : 'Waktunya Sholat ' + PR[i],
+    body: (jumat ? JUMAT : REM[i]) + (name ? `\nWilayah ${name}` : '')
+  };
+}
 const WINDOW = 8; // menit toleransi keterlambatan pemanggil cron
 
 /* tanggal & menit-dalam-hari di zona waktu tertentu */
@@ -91,9 +106,10 @@ module.exports = async (req, res) => {
       const key = crypto.createHash('sha1').update(r.endpoint).digest('hex') + `|${date}|${PK[i]}|${kind}`;
       const ins = await db.execute({ sql: 'INSERT OR IGNORE INTO sent(k,ts) VALUES(?,?)', args: [key, Date.now()] });
       if (!ins.rowsAffected) return 'dup';
-      const place = r.name ? ` untuk wilayah ${r.name}` : '';
+      const friday = new Date(date + 'T00:00:00Z').getUTCDay() === 5;
+      const m = nowMsg(i, friday, r.name);
       const payload = kind === 'now'
-        ? { title: 'Waktu ' + PR[i], body: `Telah masuk waktu sholat ${PR[i]}${place}`, tag: `sholat-${PK[i]}-now`, adzan: !!r.adzan, t: Date.now() }
+        ? { title: m.title, body: m.body, tag: `sholat-${PK[i]}-now`, adzan: !!r.adzan, t: Date.now() }
         : { title: `${r.pre % 60 === 0 ? (r.pre / 60) + ' jam' : r.pre + ' menit'} lagi ${PR[i]}`, body: `Bersiaplah, waktu ${PR[i]} sebentar lagi masuk.`, tag: `sholat-${PK[i]}-pre`, adzan: false, t: Date.now() };
       try {
         await webpush.sendNotification(JSON.parse(r.sub), JSON.stringify(payload), { TTL: 900, urgency: 'high' });
